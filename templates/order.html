@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block start %}
+
+<div class="container mt-5 pt-5 text-center">
+    <div class="card shadow border-0 p-5">
+        <h3>Order ID: <span class="text-primary" id="order-id">{{order.order_id}}</span></h3>
+        <p class="lead">Amount: <strong>₹ <span id="amount">{{order.amount}}</span></strong></p>
+        
+        <div class="my-4">
+            <span class="badge badge-primary p-2" id="status" style="font-size: 1rem;">{{order.status}}</span>
+        </div>
+
+        <div class="progress mt-4" style="height: 30px; border-radius: 15px;">
+            <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" 
+                 id="progress-bar"
+                 role="progressbar" 
+                 style="width: 20%">20%</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    var order_id = '{{order.order_id}}';
+    let protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    let socket = new WebSocket(protocol + '//' + window.location.host + '/ws/pizza/' + order_id);
+
+    // Set initial progress on page load
+    window.onload = function() {
+        var initialProgress = getProgressFromStatus('{{order.status}}');
+        updateUI(initialProgress, '{{order.status}}');
+    };
+
+    socket.onopen = function(e) {
+        console.log('WebSocket connected');
+    };
+
+    socket.onmessage = function (e) {
+        console.log('Message received:', e.data);
+        
+        try {
+            var data = JSON.parse(e.data);
+            var payload = data.payload;
+            
+            // If payload is a string, parse it again
+            if (typeof payload === 'string') {
+                payload = JSON.parse(payload);
+            }
+            
+            console.log('Parsed payload:', payload);
+            
+            // Get progress and status from payload
+            var progressValue = payload.progress;
+            var statusText = payload.status;
+            
+            console.log('Progress:', progressValue, 'Status:', statusText);
+            
+            // Update the UI
+            updateUI(progressValue, statusText);
+            
+        } catch (error) {
+            console.error('Error parsing message:', error);
+        }
+    };
+
+    socket.onerror = function(error) {
+        console.error('WebSocket error:', error);
+    };
+
+    socket.onclose = function(e) {
+        console.log('WebSocket closed');
+    };
+
+    function getProgressFromStatus(status) {
+        switch(status) {
+            case 'Order Recieved':
+            case 'Order Received':
+                return 20;
+            case 'Baking':
+                return 40;
+            case 'Baked':
+                return 60;
+            case 'Out for delivery':
+                return 80;
+            case 'Order recieved':
+            case 'Delivered':
+                return 100;
+            default:
+                return 20;
+        }
+    }
+
+    function updateUI(progressValue, statusText) {
+        var progress = document.querySelector('#progress-bar');
+        var status_html = document.querySelector('#status');
+        
+        console.log('Updating UI - Progress:', progressValue, 'Status:', statusText);
+        
+        // Update status text
+        status_html.innerHTML = statusText;
+        
+        // Update progress bar
+        progress.style.width = progressValue + "%";
+        progress.innerText = progressValue + "%";
+
+        // Change colors based on progress
+        if (progressValue >= 100) {
+            progress.classList.remove('bg-primary', 'bg-info', 'bg-warning');
+            progress.classList.add('bg-success');
+            status_html.classList.remove('badge-primary', 'badge-info', 'badge-warning');
+            status_html.classList.add('badge-success');
+        } else if (progressValue >= 60) {
+            progress.classList.remove('bg-primary', 'bg-success');
+            progress.classList.add('bg-warning');
+            status_html.classList.remove('badge-primary', 'badge-success');
+            status_html.classList.add('badge-warning');
+        } else if (progressValue >= 40) {
+            progress.classList.remove('bg-primary', 'bg-success', 'bg-warning');
+            progress.classList.add('bg-info');
+            status_html.classList.remove('badge-primary', 'badge-success', 'badge-warning');
+            status_html.classList.add('badge-info');
+        }
+    }
+</script>
+{% endblock %}
